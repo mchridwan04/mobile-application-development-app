@@ -40,6 +40,9 @@ dependencies:
   flutter_speed_dial: ^7.0.0 #untuk membuat multi FAB
   timeline_tile: ^2.0.0 #untuk membuat timeline
   flutter_slidable: ^3.0.1 #untuk membuat slideable listtile
+  get_storage: ^2.1.1 #untuk membuat storage di penyimpanan device (session)
+  awesome_dialog: ^3.1.0 #untuk membuat dialog konfirmasi dengan animasi
+  image_picker: ^1.0.5
 
 dev_dependencies:
   flutter_test:
@@ -64,7 +67,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/image-data/welcome.jpg
+    - assets/image-data/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

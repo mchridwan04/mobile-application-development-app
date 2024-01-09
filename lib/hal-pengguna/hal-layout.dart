@@ -1,30 +1,51 @@
+// ignore_for_file: prefer_typing_uninitialized_variables, non_constant_identifier_names, avoid_print
+
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:mad_uas_app/hal-pengguna/hal-konten.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:animated_snack_bar/animated_snack_bar.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:mad_uas_app/hal-utama.dart';
 
 class HalLayout extends StatefulWidget {
-  const HalLayout({super.key});
+  HalLayout({super.key, required this.halamanindex});
+  int halamanindex;
   @override
   State<HalLayout> createState() => _HalLayoutState();
 }
 
 class _HalLayoutState extends State<HalLayout> {
-  int currentindex = 0;
-  final screens = [
+//membuat variabel untuk session
+  var sessionUsername;
+  var sessionPassword;
+  // var session_hakakses;
+  @override
+  void initState() {
+    super.initState();
+    ambilDataHewan();
+    GetStorage.init();
+    final box = GetStorage();
+    setState(() {
+      sessionUsername = box.read('simpanUsernameUser');
+      sessionPassword = box.read('simpanPasswordUser');
+    });
+  }
+
+  final halaman = [
     const HalBerandaPengguna(),
-    const HalJadwalKuliah(),
-    const HalRekapMahasiswa(),
-    const HalRekapDosen(),
+    const HalHewan(),
+    const HalPenitipan(),
+    const HalMakanan(),
   ];
-  List<String> screentitle = [
+  List menuAplikasi = [
     'Beranda',
-    'Jadwal Kuliah',
-    'Rekap Mahasiswa',
-    'Rekap Dosen',
+    'Halaman Hewan',
+    'Halaman Penitipan',
+    'Halaman Makanan',
   ];
   @override
   Widget build(BuildContext context) {
@@ -34,29 +55,35 @@ class _HalLayoutState extends State<HalLayout> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          screentitle[currentindex],
+          menuAplikasi[widget.halamanindex],
           style: const TextStyle(
               color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
         ),
-        leading: IconButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            icon: const Icon(
-              Icons.arrow_back_ios,
-              size: 20,
-              color: Colors.black,
-            )),
+        leading: TextButton.icon(
+          onPressed: () {
+            formKonfirmasiKeluar(context);
+          },
+          icon: const Icon(
+            Icons.arrow_back_ios,
+            size: 20,
+            color: Colors.black,
+          ),
+          label: const Text(
+            'Keluar',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        leadingWidth: 100,
       ),
       bottomNavigationBar: BottomNavigationBar(
           backgroundColor: Colors.teal,
           type: BottomNavigationBarType.shifting,
-          fixedColor: Colors.black, //if it is shifting
+          fixedColor: Colors.black, //memberi warna jika menu di pilih
           iconSize: 30,
-          currentIndex: currentindex,
+          currentIndex: widget.halamanindex,
           landscapeLayout: BottomNavigationBarLandscapeLayout.spread,
           onTap: (value) {
-            currentindex = value;
+            widget.halamanindex = value;
             setState(() {});
           },
           items: const [
@@ -67,22 +94,21 @@ class _HalLayoutState extends State<HalLayout> {
             BottomNavigationBarItem(
                 backgroundColor: Colors.teal,
                 icon: Icon(Icons.table_rows_rounded),
-                label: 'Jadwal Kuliah'),
+                label: 'Data Hewan'),
             BottomNavigationBarItem(
                 backgroundColor: Colors.teal,
                 icon: Icon(Icons.people_alt_rounded),
-                label: 'Rekap Mahasiswa'),
+                label: 'Data Penitipan'),
             BottomNavigationBarItem(
                 backgroundColor: Colors.teal,
                 icon: Icon(Icons.people_alt_rounded),
-                label: 'Rekap Mahasiswa'),
+                label: 'Data Makanan'),
           ]),
       body: IndexedStack(
-        index: currentindex,
-        children: screens,
+        index: widget.halamanindex,
+        children: halaman,
       ),
       floatingActionButton: SpeedDial(
-// both default to 16
         animatedIcon: AnimatedIcons.menu_close,
         animatedIconTheme: const IconThemeData(size: 22.0),
         closeManually: false,
@@ -97,111 +123,87 @@ class _HalLayoutState extends State<HalLayout> {
           SpeedDialChild(
               child: const Icon(Icons.people_alt_rounded),
               backgroundColor: Colors.white,
-              label: 'Entri Mahasiswa',
+              label: 'Entri Hewan',
               labelStyle: const TextStyle(fontSize: 12.0),
-              onTap: () => formEntriMahasiswa(context)),
+              onTap: () => formEntriHewan(context)),
           SpeedDialChild(
               child: const Icon(Icons.people_alt_rounded),
               backgroundColor: Colors.white,
-              label: 'Entri Dosen',
+              label: 'Entri Makanan',
               labelStyle: const TextStyle(fontSize: 12.0),
-              onTap: () => formEntriDosen(context)),
+              onTap: () => formEntriMakanan(context)),
           SpeedDialChild(
             child: const Icon(Icons.content_paste_search_rounded),
             backgroundColor: Colors.white,
-            label: 'Entri Jadwal Kuliah',
+            label: 'Entri Data Penitipan',
             labelStyle: const TextStyle(fontSize: 12.0),
-            onTap: () => formEntriJadwalKuliah(context),
+            onTap: () => formEntriPenitipan(context),
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.refresh_rounded),
+            backgroundColor: Colors.white,
+            label: 'Refresh Halaman',
+            labelStyle: const TextStyle(fontSize: 12.0),
+            onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => HalLayout(halamanindex: 0))),
           ),
         ],
       ),
     );
   }
 
-//------------------------------ AREA FORM ENTRI -----------------------------
-//untuk validasi form entri saat input data
   final _formKey = GlobalKey<FormState>();
-//mendefinisikan field/kolom inputan dosen
-  var nidn_dosen = TextEditingController();
-  var nama_dosen = TextEditingController();
-//mendefinisikan field/kolom inputan mahasiswa
-  var nim_mahasiswa = TextEditingController();
-  var nama_mahasiswa = TextEditingController();
-  var jk_mahasiswa = TextEditingController();
-  var tgl_lahir_mahasiswa = TextEditingController();
-  var alamat_mahasiswa = TextEditingController();
-  Future submitDosen() async {
-    try {
-      return await http.post(
-        Uri.parse("http://localhost/mad_uas_app_api/tambah.php?tb=dosen"),
-        body: {
-          "nidn_dosen": nidn_dosen.text,
-          "nama_dosen": nama_dosen.text,
-        },
-      ).then((value) {
-//tampilkan pesan setelah menambahkan data ke database
-//kamu dapat menambah pesan/notifikasi di sini
-        var data = jsonDecode(value.body);
-        print(data["message"]);
-        if (data["status_operasi"] == 'Berhasil') {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (context) => const HalLayout()));
-          AnimatedSnackBar.material(
-            'Operasi berhasil.',
-            type: AnimatedSnackBarType.success,
-            duration: const Duration(seconds: 1),
-          ).show(context);
-        } else {
-          AnimatedSnackBar.material(
-            'Operasi gagal.',
-            type: AnimatedSnackBarType.warning,
-            duration: const Duration(seconds: 1),
-          ).show(context);
-        }
-      });
-    } catch (e) {
-      print(e);
-    }
-  }
+// !------------------------------ AREA FORM TAMBAH -------------------------------
+// !------------------------------ FORM TAMABAH HEWAN ---------------------------------
+  Future formEntriHewan(BuildContext context) {
+    var nama = TextEditingController();
+    var tanggalLahir = TextEditingController();
+    var jenisKelamin;
+    var foto = TextEditingController();
+    List opsi_jenisKelamin = [
+      'Laki-Laki',
+      'Perempuan',
+    ];
 
-  Future submitMahasiswa() async {
-    try {
-      return await http.post(
-        Uri.parse("http://localhost/mad_uas_app_api/tambah.php?tb=mahasiswa"),
-        body: {
-          "nim_mahasiswa": nim_mahasiswa.text,
-          "nama_mahasiswa": nama_mahasiswa.text,
-          "jk_mahasiswa": jk_mahasiswa.text,
-          "tgl_lahir_mahasiswa": tgl_lahir_mahasiswa.text,
-          "alamat_mahasiswa": alamat_mahasiswa.text,
-        },
-      ).then((value) {
-//tampilkan pesan setelah menambahkan data ke database
-//kamu dapat menambah pesan/notifikasi di sini
-        var data = jsonDecode(value.body);
-        print(data["message"]);
-        if (data["status_operasi"] == 'Berhasil') {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (context) => const HalLayout()));
-          AnimatedSnackBar.material(
-            'Operasi berhasil.',
-            type: AnimatedSnackBarType.success,
-            duration: const Duration(seconds: 1),
-          ).show(context);
-        } else {
-          AnimatedSnackBar.material(
-            'Operasi gagal.',
-            type: AnimatedSnackBarType.warning,
-            duration: const Duration(seconds: 1),
-          ).show(context);
-        }
-      });
-    } catch (e) {
-      print(e);
+    Future simpanHewan() async {
+      try {
+        return await http.post(
+          Uri.parse("http://localhost:8000/api/hewans"),
+          body: {
+            "nama": nama.text,
+            "tanggal_lahir": tanggalLahir.text,
+            "jenis_kelamin": jenisKelamin,
+            "foto": foto.text,
+          },
+        ).then((value) {
+          var data = jsonDecode(value.body);
+          print(data["success"]);
+          if (data["success"] == true) {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => HalLayout(halamanindex: 1)));
+            AnimatedSnackBar.material(
+              'Operasi berhasil.',
+              type: AnimatedSnackBarType.success,
+              duration: const Duration(seconds: 1),
+            ).show(context);
+          } else {
+            AnimatedSnackBar.material(
+              'Operasi gagal.',
+              type: AnimatedSnackBarType.warning,
+              duration: const Duration(seconds: 1),
+            ).show(context);
+          }
+        });
+      } catch (e) {
+        print(e);
+      }
     }
-  }
 
-  Future formEntriMahasiswa(BuildContext context) {
+//FORM ENTRI
     return showModalBottomSheet(
         isScrollControlled: true,
         context: context,
@@ -216,13 +218,13 @@ class _HalLayoutState extends State<HalLayout> {
                 key: _formKey,
                 child: SingleChildScrollView(
                   child: Container(
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.all(40.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppBar(
                           title: const Text(
-                            'Form Entri Mahasiswa',
+                            'Form Entri Hewan',
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87),
@@ -233,245 +235,99 @@ class _HalLayoutState extends State<HalLayout> {
                           iconTheme: const IconThemeData(color: Colors.black87),
                         ),
                         const SizedBox(height: 5),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: nim_mahasiswa,
-                            decoration: const InputDecoration(
-                                label: Text('NIM'),
-                                hintText: "Tulis NIM ...",
-                                fillColor: Colors.white,
-                                filled: true),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'NIM is Required!';
-                              }
-                              return null;
-                            },
+                        TextFormField(
+                          controller: nama,
+                          decoration: const InputDecoration(
+                              label: Text('Nama'),
+                              hintText: "Tulis Nama ...",
+                              fillColor: Colors.white,
+                              filled: true),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
+                          validator: (value) {
+                            if (value!.isEmpty) {
+                              return 'Nama is Required!';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 10),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: nama_mahasiswa,
-                            decoration: const InputDecoration(
-                                label: Text('Nama'),
-                                hintText: 'Tulis nama ...',
-                                fillColor: Colors.white,
-                                filled: true),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'Nama is Required!';
-                              }
-                              return null;
-                            },
+                        DropdownButtonFormField<String>(
+                          value: jenisKelamin,
+                          onChanged: (value) {
+                            setState(() {
+                              jenisKelamin = value;
+                            });
+                          },
+                          items: opsi_jenisKelamin.map((value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                          decoration: const InputDecoration(
+                            label: Text('Jenis Kelamin',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            hintText: 'Pilih Jenis Kelamin',
+                            fillColor: Colors.white,
+                            filled: true,
                           ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Jenis Kelamin is Required!';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 10),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: jk_mahasiswa,
-                            decoration: const InputDecoration(
-                                label: Text('Jenis Kelamin'),
-                                hintText: 'Tulis jenis kelamin ...',
-                                fillColor: Colors.white,
-                                filled: true),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'Jenis kelamin is Required!';
-                              }
-                              return null;
-                            },
-                          ),
+                        TextFormField(
+                          controller: tanggalLahir,
+                          onTap: () async {
+                            DateTime? pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime(1950),
+                                lastDate: DateTime(2050));
+                            if (pickedDate != null) {
+                              tanggalLahir.text =
+                                  DateFormat('yyyy-MM-dd').format(pickedDate);
+                            }
+                          },
+                          decoration: const InputDecoration(
+                              label: Text('Tanggal Lahir',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              hintText: "Tulis tanggal lahir ...",
+                              fillColor: Colors.white,
+                              filled: true),
+                          validator: (value) {
+                            if (value!.isEmpty) {
+                              return 'Tanggal lahir is Required!';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 10),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: tgl_lahir_mahasiswa,
-                            onTap: () async {
-                              DateTime? pickedDate = await showDatePicker(
-                                  context: context,
-                                  initialDate: DateTime.now(),
-                                  firstDate: DateTime(1950),
-                                  lastDate: DateTime(2050));
-                              if (pickedDate != null) {
-                                tgl_lahir_mahasiswa.text =
-                                    DateFormat('yyyy-MM-dd').format(pickedDate);
-                              }
-                            },
-                            decoration: const InputDecoration(
-                                label: Text('Tanggal Lahir'),
-                                hintText: "Tulis tanggal lahir ...",
-                                fillColor: Colors.white,
-                                filled: true),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'Tanggal lahir is Required!';
-                              }
-                              return null;
-                            },
+                        const SizedBox(height: 5),
+                        TextFormField(
+                          controller: foto,
+                          decoration: const InputDecoration(
+                              label: Text('Link Foto'),
+                              hintText: "Tulis Link Foto ...",
+                              fillColor: Colors.white,
+                              filled: true),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: alamat_mahasiswa,
-                            minLines: 5,
-                            maxLines: null,
-                            decoration: const InputDecoration(
-                                label: Text('Alamat'),
-                                hintText: 'Tulis alamat ...',
-                                fillColor: Colors.white,
-                                filled: true),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'Alamat is Required!';
-                              }
-                              return null;
-                            },
-                          ),
+                          validator: (value) {
+                            if (value!.isEmpty) {
+                              return 'Link is Required!';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 15),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Container(
-                            padding: const EdgeInsets.all(1),
-                            child: MaterialButton(
-                              minWidth: double.infinity,
-                              height: 60,
-                              color: Colors.green,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(50)),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(
-                                    Icons.save,
-                                    color: Colors.white,
-                                  ),
-                                  SizedBox(
-                                    width: 10,
-                                  ),
-                                  Text(
-                                    "Simpan",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                        color: Colors.white),
-                                  ),
-                                ],
-                              ),
-                              onPressed: () {
-//validasi
-                                if (_formKey.currentState!.validate()) {
-//menjalankan fungsi untuk kirim data ke database
-                                  submitMahasiswa();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ));
-  }
-
-  Future formEntriDosen(BuildContext context) {
-    return showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.white,
-        barrierColor: Colors.black87.withOpacity(0.5),
-        isDismissible: true,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-        builder: (context) => SizedBox(
-              child: Form(
-                key: _formKey,
-                child: Container(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppBar(
-                        title: const Text(
-                          'Form Entri Dosen',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87),
-                        ),
-                        centerTitle: true,
-                        backgroundColor: Colors.white,
-                        elevation: 0,
-                        iconTheme: const IconThemeData(color: Colors.black87),
-                      ),
-                      const SizedBox(height: 5),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: TextFormField(
-                          controller: nidn_dosen,
-                          decoration: const InputDecoration(
-                              label: Text('NIDN Dosen'),
-                              hintText: "Tulis NIDN dosen ...",
-                              fillColor: Colors.white,
-                              filled: true),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          validator: (value) {
-                            if (value!.isEmpty) {
-                              return 'NIDN dosen is Required!';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: TextFormField(
-                          controller: nama_dosen,
-                          decoration: const InputDecoration(
-                              label: Text('Nama Dosen'),
-                              hintText: 'Tulis nama dosen ...',
-                              fillColor: Colors.white,
-                              filled: true),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          validator: (value) {
-                            if (value!.isEmpty) {
-                              return 'Nama dosen is Required!';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Container(
+                        Container(
                           padding: const EdgeInsets.all(1),
                           child: MaterialButton(
                             minWidth: double.infinity,
@@ -480,9 +336,9 @@ class _HalLayoutState extends State<HalLayout> {
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(50)),
-                            child: Row(
+                            child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
+                              children: [
                                 Icon(
                                   Icons.save,
                                   color: Colors.white,
@@ -500,13 +356,207 @@ class _HalLayoutState extends State<HalLayout> {
                               ],
                             ),
                             onPressed: () {
-//validasi
                               if (_formKey.currentState!.validate()) {
-//menjalankan fungsi untuk kirim data ke database
-                                submitDosen();
+                                simpanHewan();
                               }
                             },
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ));
+  }
+
+// !---------------------------- FORM TAMBAH MAKANAN ------------------------------
+  Future formEntriMakanan(BuildContext context) {
+//mendefinisikan field/kolom inputan dosen
+    var nama = TextEditingController();
+    var jenis = TextEditingController();
+    var stock = TextEditingController();
+    var foto_makanan = TextEditingController();
+//perintah untuk menyimpan data dosen
+    Future simpanMakanan() async {
+      try {
+        return await http.post(
+          Uri.parse("http://localhost:8000/api/makanans"),
+          body: {
+            "nama": nama.text,
+            "jenis": jenis.text,
+            "stock": stock.text,
+            "foto_makanan": foto_makanan.text,
+          },
+        ).then((value) {
+//menampilkan pesan setelah menambahkan data ke database, kamu dapat menambah pesan atau notifikasi lain di sini
+          var data = jsonDecode(value.body);
+          print(data["success"]);
+          if (data["success"] == true) {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => HalLayout(halamanindex: 3)));
+            AnimatedSnackBar.material(
+              'Operasi berhasil.',
+              type: AnimatedSnackBarType.success,
+              duration: const Duration(seconds: 1),
+            ).show(context);
+          } else {
+            AnimatedSnackBar.material(
+              'Operasi gagal.',
+              type: AnimatedSnackBarType.warning,
+              duration: const Duration(seconds: 1),
+            ).show(context);
+          }
+        });
+      } catch (e) {
+        print(e);
+      }
+    }
+
+//FORM ENTRI
+    return showModalBottomSheet(
+        isScrollControlled: true,
+        context: context,
+        backgroundColor: Colors.white,
+        barrierColor: Colors.black87.withOpacity(0.5),
+        isDismissible: true,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        builder: (context) => SizedBox(
+              height: MediaQuery.of(context).size.height * 0.85,
+              child: Form(
+                key: _formKey,
+                child: Container(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppBar(
+                        title: const Text(
+                          'Tambah Data Makanan',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87),
+                        ),
+                        centerTitle: true,
+                        backgroundColor: Colors.white,
+                        elevation: 0,
+                        iconTheme: const IconThemeData(color: Colors.black87),
+                      ),
+                      const SizedBox(height: 5),
+                      TextFormField(
+                        controller: nama,
+                        decoration: const InputDecoration(
+                            label: Text('Nama Makanan'),
+                            hintText: "Tulis Nama Makanan ...",
+                            fillColor: Colors.white,
+                            filled: true),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return 'Nama Makanan is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: jenis,
+                        decoration: const InputDecoration(
+                            label: Text('Jenis Makanan'),
+                            hintText: 'Tulis Jenis Makanan ...',
+                            fillColor: Colors.white,
+                            filled: true),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return 'Jenis Makanan is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: stock,
+                        decoration: const InputDecoration(
+                            label: Text('Stock'),
+                            hintText: 'Tulis Jumlah Stock ...',
+                            fillColor: Colors.white,
+                            filled: true),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return 'Jumlah Stock is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: foto_makanan,
+                        decoration: const InputDecoration(
+                            label: Text('Foto'),
+                            hintText: 'Link Foto Makanan ...',
+                            fillColor: Colors.white,
+                            filled: true),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return 'Link Foto is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      Container(
+                        padding: const EdgeInsets.all(1),
+                        child: MaterialButton(
+                          minWidth: double.infinity,
+                          height: 60,
+                          color: Colors.green,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(50)),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.save,
+                                color: Colors.white,
+                              ),
+                              SizedBox(
+                                width: 10,
+                              ),
+                              Text(
+                                "Simpan",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
+                          onPressed: () {
+//validasi
+                            if (_formKey.currentState!.validate()) {
+//menjalankan fungsi untuk kirim data ke database
+                              simpanMakanan();
+                            }
+                          },
                         ),
                       ),
                     ],
@@ -516,15 +566,313 @@ class _HalLayoutState extends State<HalLayout> {
             ));
   }
 
-  Future formEntriJadwalKuliah(BuildContext context) {
+// !------------------------- FORM TAMBAH DATA PENITIPAN ------------------------
+  List opsi_hewan = [];
+
+  Future ambilDataHewan() async {
+    final tampil_hewan =
+        await http.get(Uri.parse("http://localhost:8000/api/hewans"));
+    if (tampil_hewan.statusCode == 200) {
+      final ambil_data_hewan = jsonDecode(tampil_hewan.body)['data'] as List;
+
+      for (var data_hewan in ambil_data_hewan) {
+        opsi_hewan.add('${data_hewan['id']} - ${data_hewan['nama']}');
+      }
+
+      return opsi_hewan;
+    }
+  }
+
+  Future formEntriPenitipan(BuildContext context) {
+    var namaPemilik = TextEditingController();
+    var tanggal = TextEditingController();
+    var hewan_id;
+    Future simpanPenitipan() async {
+      try {
+        return await http.post(
+          Uri.parse("http://localhost:8000/api/penitipans"),
+          body: {
+            "nama_pemilik": namaPemilik.text,
+            "tanggal": tanggal.text,
+            "hewan_id": hewan_id,
+          },
+        ).then((value) {
+          var data = jsonDecode(value.body);
+          print(data["success"]);
+          if (data["success"] == true) {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => HalLayout(halamanindex: 2)));
+            AnimatedSnackBar.material(
+              'Operasi berhasil.',
+              type: AnimatedSnackBarType.success,
+              duration: const Duration(seconds: 1),
+            ).show(context);
+          } else {
+            AnimatedSnackBar.material(
+              'Operasi gagal.',
+              type: AnimatedSnackBarType.warning,
+              duration: const Duration(seconds: 1),
+            ).show(context);
+          }
+        });
+      } catch (e) {
+        print(e);
+      }
+    }
+
     return showModalBottomSheet(
+        isScrollControlled: true,
         context: context,
         backgroundColor: Colors.white,
         barrierColor: Colors.black87.withOpacity(0.5),
+        isDismissible: true,
         shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-        builder: (context) => Container(
-              height: 200,
+        builder: (context) => SizedBox(
+              height: MediaQuery.of(context).size.height * 0.85,
+              child: Form(
+                key: _formKey,
+                child: Container(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppBar(
+                        title: const Text(
+                          'Form Entri Jadwal Kuliah',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87),
+                        ),
+                        centerTitle: true,
+                        backgroundColor: Colors.white,
+                        elevation: 0,
+                        iconTheme: const IconThemeData(color: Colors.black87),
+                      ),
+                      const SizedBox(height: 5),
+                      TextFormField(
+                        controller: namaPemilik,
+                        decoration: const InputDecoration(
+                            label: Text('Nama Pemilik'),
+                            hintText: "Tulis Nama Pemilik ...",
+                            fillColor: Colors.white,
+                            filled: true),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return 'Nama Pemilik is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: tanggal,
+                        onTap: () async {
+                          DateTime? pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime(1950),
+                              lastDate: DateTime(2050));
+                          if (pickedDate != null) {
+                            tanggal.text =
+                                DateFormat('yyyy-MM-dd').format(pickedDate);
+                          }
+                        },
+                        decoration: const InputDecoration(
+                            label: Text('Tanggal Lahir',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            hintText: "Tulis tanggal lahir ...",
+                            fillColor: Colors.white,
+                            filled: true),
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return 'Tanggal lahir is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: hewan_id,
+                        onChanged: (value) {
+                          setState(() {
+                            hewan_id = value;
+                          });
+                        },
+                        items: opsi_hewan.map((value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              value,
+                              overflow: TextOverflow.fade,
+                              maxLines: 1,
+                              softWrap: false,
+                            ),
+                          );
+                        }).toList(),
+                        decoration: const InputDecoration(
+                          label: Text('Nama Hewan',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          hintText: ' - Pilih Hewan -',
+                          fillColor: Colors.white,
+                          filled: true,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Hewan is Required!';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      Container(
+                        padding: const EdgeInsets.all(1),
+                        child: MaterialButton(
+                          minWidth: double.infinity,
+                          height: 60,
+                          color: Colors.green,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(50)),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.save,
+                                color: Colors.white,
+                              ),
+                              SizedBox(
+                                width: 10,
+                              ),
+                              Text(
+                                "Simpan",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
+                          onPressed: () {
+                            if (_formKey.currentState!.validate()) {
+                              simpanPenitipan();
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ));
+  }
+
+// !-------------- FORM KONFIRMASI LOGOUT / KELUAR APLIKASI --------------------
+  Future formKonfirmasiKeluar(BuildContext context) {
+//perintah untuk menjalankan fungsi ambil data session dari storage
+    Future prosesKeluar() async {
+      GetStorage.init();
+      final box = GetStorage();
+      box.remove('simpanUsernameUser');
+      box.remove('simpanPasswordUser');
+      // box.remove('simpan_hakakses_pengguna');
+      AnimatedSnackBar.material(
+        'Keluar berhasil',
+        type: AnimatedSnackBarType.success,
+        duration: const Duration(seconds: 1),
+      ).show(context);
+      Timer(const Duration(seconds: 2), () {
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (context) => const HalUtama()));
+      });
+    }
+
+    return showModalBottomSheet(
+        isScrollControlled: true,
+        context: context,
+        backgroundColor: Colors.white,
+        barrierColor: Colors.black87.withOpacity(0.5),
+        isDismissible: true,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        builder: (context) => SizedBox(
+              height: MediaQuery.of(context).size.height * 0.85,
+              child: Form(
+                key: _formKey,
+                child: Container(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      AppBar(
+                        title: const Text(
+                          'Profil Akun',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87),
+                        ),
+                        centerTitle: true,
+                        backgroundColor: Colors.white,
+                        elevation: 0,
+                        iconTheme: const IconThemeData(color: Colors.black87),
+                      ),
+                      const SizedBox(height: 5),
+                      Icon(
+                        Icons.person_pin,
+                        size: 200,
+                        color: Colors.grey[900],
+                      ),
+                      const SizedBox(height: 20),
+                      Text('Username : $sessionUsername'),
+                      const SizedBox(height: 20),
+                      Text('Password : $sessionPassword'),
+                      const SizedBox(height: 20),
+                      // Text('Hak Akses : $session_hakakses'),
+                      // const SizedBox(height: 15),
+                      Container(
+                        padding: const EdgeInsets.all(1),
+                        child: MaterialButton(
+                          minWidth: double.infinity,
+                          height: 60,
+                          color: Colors.orange[900],
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(50)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(
+                                Icons.logout_rounded,
+                                color: Colors.white,
+                              ),
+                              SizedBox(
+                                width: 10,
+                              ),
+                              Text(
+                                "K e l u a r",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
+                          onPressed: () {
+//proses keluar atau logout
+                            prosesKeluar();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ));
   }
 }

@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:animated_snack_bar/animated_snack_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:mad_uas_app/hal-pengguna/hal-layout.dart';
 import 'package:mad_uas_app/hal-daftar-akun.dart';
+import 'package:mad_uas_app/hal-utama.dart';
 
 class HalMasuk extends StatefulWidget {
   const HalMasuk({super.key});
@@ -16,7 +19,7 @@ class _HalMasukState extends State<HalMasuk> {
 //mendefinisikan field/kolom inputan
   var username = TextEditingController();
   var password = TextEditingController();
-  Future _onSubmit() async {
+  Future prosesLogin() async {
     try {
       return await http.post(
         Uri.parse("http://localhost:8000/api/login"),
@@ -25,18 +28,30 @@ class _HalMasukState extends State<HalMasuk> {
           "password": password.text,
         },
       ).then((value) {
-//tampilkan pesan setelah menambahkan data ke database
-//kamu dapat menambah pesan/notifikasi di sini
+//membuat variabel data untuk menyimpan data yang diambil dari database
         var data = jsonDecode(value.body);
-        print(data["message"]);
-        if (data["message"] == 'Login succesfully') {
+//menampilkan pesan setelah menambahkan data ke database, kamu dapat menambah pesan ataunotifikasi di sini
+        // ignore: avoid_print
+        print(data["success"]);
+        if (data["success"] == true) {
           AnimatedSnackBar.material(
-            'Masuk berhasil.',
+            'Welcome to the jungle',
             type: AnimatedSnackBarType.success,
             duration: const Duration(seconds: 1),
           ).show(context);
-          Navigator.push(context,
-              MaterialPageRoute(builder: (context) => const HalLayout()));
+          GetStorage.init();
+          final box = GetStorage();
+          final dataUser = data["data"];
+          final simpanUsername = dataUser["username"];
+          final simpanPassword = dataUser["password"];
+          box.write('simpanUsernameUser', simpanUsername);
+          box.write('simpanPasswordUser', simpanPassword);
+          Timer(const Duration(seconds: 2), () {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => HalLayout(halamanindex: 0)));
+          });
         } else {
           AnimatedSnackBar.material(
             'Masuk gagal.',
@@ -59,7 +74,8 @@ class _HalMasukState extends State<HalMasuk> {
         elevation: 0,
         leading: IconButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (context) => const HalUtama()));
             },
             icon: const Icon(
               Icons.arrow_back_ios,
@@ -99,105 +115,98 @@ class _HalMasukState extends State<HalMasuk> {
                 Form(
                   key: _formKey,
                   child: Container(
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.all(40.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 5),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: username,
-                            decoration: InputDecoration(
-                                label: const Text('Username'),
-                                hintText: "Tulis username ...",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(50),
-                                ),
-                                fillColor: Colors.white,
-                                filled: true),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'Username is Required!';
-                              }
-                              return null;
-                            },
+                        TextFormField(
+                          controller: username,
+                          decoration: InputDecoration(
+                              label: const Text('Username'),
+                              hintText: "Tulis username ...",
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                              fillColor: Colors.white,
+                              filled: true),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
+                          validator: (value) {
+                            if (value!.isEmpty) {
+                              return 'Username is Required!';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 10),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextFormField(
-                            controller: password,
-                            decoration: InputDecoration(
-                                label: const Text('Password'),
-                                hintText: 'Tulis password ...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(50),
-                                ),
-                                fillColor: Colors.white,
-                                filled: true),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return 'Password is Required!';
-                              }
-                              return null;
-                            },
+                        TextFormField(
+                          controller: password,
+                          decoration: InputDecoration(
+                              label: const Text('Password'),
+                              hintText: 'Tulis password ...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                              fillColor: Colors.white,
+                              filled: true),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
+                          validator: (value) {
+                            if (value!.isEmpty) {
+                              return 'Password is Required!';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 15),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Container(
-                            padding: const EdgeInsets.all(1),
-                            decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(50),
-                                border: const Border(
-                                  bottom: BorderSide(color: Colors.black),
-                                  top: BorderSide(color: Colors.black),
-                                  left: BorderSide(color: Colors.black),
-                                  right: BorderSide(color: Colors.black),
-                                )),
-                            child: MaterialButton(
-                              minWidth: double.infinity,
-                              height: 60,
-                              color: Colors.teal,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(50)),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    "M a s u k",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                        color: Colors.white),
-                                  ),
-                                  SizedBox(
-                                    width: 10,
-                                  ),
-                                  Icon(
-                                    Icons.login_rounded,
-                                    color: Colors.white,
-                                  ),
-                                ],
-                              ),
-                              onPressed: () {
-                                if (_formKey.currentState!.validate()) {
-                                  _onSubmit();
-                                }
-                              },
+                        Container(
+                          padding: const EdgeInsets.all(1),
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(50),
+                              border: const Border(
+                                bottom: BorderSide(color: Colors.black),
+                                top: BorderSide(color: Colors.black),
+                                left: BorderSide(color: Colors.black),
+                                right: BorderSide(color: Colors.black),
+                              )),
+                          child: MaterialButton(
+                            minWidth: double.infinity,
+                            height: 60,
+                            color: Colors.teal,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(50)),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Text(
+                                  "M a s u k",
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      color: Colors.white),
+                                ),
+                                SizedBox(
+                                  width: 10,
+                                ),
+                                Icon(
+                                  Icons.login_rounded,
+                                  color: Colors.white,
+                                ),
+                              ],
                             ),
+                            onPressed: () {
+//validasi
+                              if (_formKey.currentState!.validate()) {
+//menjalankan fungsi untuk kirim data ke database
+                                prosesLogin();
+                              }
+                            },
                           ),
                         ),
                       ],
@@ -212,7 +221,7 @@ class _HalMasukState extends State<HalMasuk> {
                 const Text("Belum memiliki akun ? "),
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
+                    Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
                             builder: (context) => const HalDaftarAkun()));
